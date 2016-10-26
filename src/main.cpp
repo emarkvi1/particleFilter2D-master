@@ -34,6 +34,7 @@
 	#include "pf.h"
 
 	using namespace std;
+	using namespace Eigen;
 #endif
 
 // Unit test
@@ -41,7 +42,7 @@
 
 int main(int argc, char **argv)
 {
-	if( argc == 2 ) {
+	if( argc == 3 ) {
 		Parser *parse = new Parser();
 		
 		string map_name(argv[1]);
@@ -49,7 +50,8 @@ int main(int argc, char **argv)
 
 		// Check Map information
 		cout << "Map information: " << endl;
-		cout << "Resolution " << parse->_my_map->resolution << " SizeX " << parse->_my_map->size_x << " SizeY " << parse->_my_map->size_y << endl;
+		cout << "Resolution " << parse->_my_map->resolution << " SizeX " << parse->_my_map->size_x;
+		cout << " SizeY " << parse->_my_map->size_y << endl;
 		cout << "Min_Max X " << parse->_my_map->min_x << " " << parse->_my_map->max_x << endl;
 		cout << "Min_Max Y " << parse->_my_map->min_y << " " << parse->_my_map->max_y << endl;
 		cout << "Offset X " << parse->_my_map->offset_x << " Offset Y " << parse->_my_map->offset_y << endl;
@@ -70,7 +72,7 @@ int main(int argc, char **argv)
 					image.at<float>(i, j) = parse->_my_map->cells[i][j]; 
 			} 
 	  	
-	  	string filename = "./data/log/robotdata1.log";
+	  	string filename(argv[2]);
 		parse->read_log_data(filename.c_str());
 
 	  	imshow("Image",image);
@@ -121,7 +123,8 @@ int main(int argc, char **argv)
 
 		// Check Map information
 		cout << "Map information: " << endl;
-		cout << "Resolution " << parse->_my_map->resolution << " SizeX " << parse->_my_map->size_x << " SizeY " << parse->_my_map->size_y << endl;
+		cout << "Resolution " << parse->_my_map->resolution << " SizeX " << parse->_my_map->size_x << " SizeY ";
+		cout << parse->_my_map->size_y << endl;
 		cout << "Min_Max X " << parse->_my_map->min_x << " " << parse->_my_map->max_x << endl;
 		cout << "Min_Max Y " << parse->_my_map->min_y << " " << parse->_my_map->max_y << endl;
 		cout << "Offset X " << parse->_my_map->offset_x << " Offset Y " << parse->_my_map->offset_y << endl;
@@ -129,10 +132,39 @@ int main(int argc, char **argv)
 	  	string filename(argv[2]);
 		parse->read_log_data(filename.c_str());  //output of log 
 
-		pf pf(parse->_my_map, 110); 
+		pf pf(parse->_my_map, 1); 
 		pf.test();
 
-		pf.motion_update(parse->_logData[0][0]);
+		int prev_ptr, curr_ptr;
+		for (int i = 0; i < parse->_logData->size() - 1; i++) {
+			while (parse->_logData[0][i]->type == L_DATA) {
+				i++;
+				if (i == parse->_logData->size())
+					break;
+			}
+			if (i == parse->_logData->size())
+				break;
+
+			prev_ptr = i;
+			curr_ptr = i+1;
+			if (curr_ptr == parse->_logData->size())
+					break;
+			while (parse->_logData[0][curr_ptr]->type == L_DATA) {
+				curr_ptr++;
+				if (curr_ptr == parse->_logData->size())
+					break;
+			}
+			if (curr_ptr >= parse->_logData->size())
+				break;
+
+			printf("\n%d %d\n", prev_ptr, curr_ptr);
+			pf.motion_update(parse->_logData->at(curr_ptr), parse->_logData->at(prev_ptr));
+			printf("Current State: %f %f %f\n", pf._curSt->at(0)->x, pf._curSt->at(0)->y, pf._curSt->at(0)->bearing);
+			printf("Next State: %f %f %f\n", pf._nxtSt->at(0)->x, pf._nxtSt->at(0)->y, pf._nxtSt->at(0)->bearing);
+			delete pf._curSt;
+			pf._curSt = new vector<particle_type*>(*pf._nxtSt);
+			pf._nxtSt->clear();
+		}
 
 	} else {
 		cout << "ERROR: Enter dat file name" << endl;

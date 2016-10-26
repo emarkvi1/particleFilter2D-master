@@ -17,6 +17,7 @@
 #include <mutex>
 #include <random>
 #include <math.h>
+#include <Eigen/Dense>
 
 #include "Types.h"
 #include "bmm.h"
@@ -28,6 +29,7 @@
 #endif
 
 using namespace std;
+using namespace Eigen;
 
 typedef struct 
 
@@ -100,7 +102,7 @@ public:
 	void sensor_update( log_type *data );
 
 	/* MOTION UPDATE */
-	void motion_update( log_type *data );
+	void motion_update( log_type *data, log_type *prev_data);
 	void test();
 
 }; //end class pf

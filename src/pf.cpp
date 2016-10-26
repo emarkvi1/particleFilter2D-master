@@ -20,7 +20,7 @@ pf::pf(map_type *map, int max_particles):
 	_bmm( new beamMeasurementModel() ),
 	_generator( new default_random_engine )
 {
-	// init();
+	init();
 }
 
 /* DESTRUCTOR */
@@ -52,13 +52,15 @@ void pf::init()
 		particle->y = RandomFloat( _map->min_y, _map->max_y);
 		particle->bearing = RandomFloat(0.0, 2 * M_PI);
 
-		int x_ = convToGrid_x(particle->x);
-		int y_ = convToGrid_y(particle->y);
+		int x_ = particle->x;
+		int y_ = particle->y;
 
 		while (_map->cells[x_][y_] == -1 || _map->cells[x_][y_] <= obst_thres) 
 		{
 			particle->x = RandomFloat( _map->min_x, _map->max_x);
 			particle->y = RandomFloat( _map->min_y, _map->max_y);
+			x_ = particle->x;
+			y_ = particle->y;
 		}
 
 		_curSt->push_back(particle);
@@ -275,27 +277,27 @@ particle_type pf::motion_sample(particle_type u, particle_type sigma) const
 	return dP;
 }
 
+
 void pf::test()
 {
 	printf("test!\n");
 }
 
-void pf::motion_update( log_type *data )
+void pf::motion_update( log_type *data, log_type *prev_data)
 {
-	/*float *meatOfData = data->r;
-	float dx = meatOfData[0];
-	float dy = meatOfData[1];
-	float db = meatOfData[2];
-	float ts = meatOfData[3];*/
-
 	// printf("dx: %f, dy: %f, db: %f\n", dx,dy,db);
-	printf("dx: %f, dy: %f, db: %f\n", data->x, data->y, data->theta);
+	//printf("current x: %f, y: %f, b: %f\n", data->x, data->y, data->theta);
+	//printf("prev: x: %f, y: %f, b: %f\n", prev_data->x, prev_data->y, prev_data->theta);
 
+	// detla x, y, bearing 
 	particle_type dP_u;
-	dP_u.x = data->x;
-	dP_u.y = data->y;
-	dP_u.bearing = data->theta;
+	dP_u.x = data->x - prev_data->x;
+	dP_u.y = data->y - prev_data->y;
+	dP_u.bearing = data->theta - prev_data->theta;
 
+	//printf("delta: x: %f, y: %f, b: %f\n",dP_u.x, dP_u.y, dP_u.bearing);
+
+	// variance 
 	particle_type sigma; 
 	sigma.x = 10;
 	sigma.y = 10;
@@ -304,104 +306,78 @@ void pf::motion_update( log_type *data )
 	//TODO: update the next state for now
 	//unique_lock<mutex> lock_curSt(_curStMutex);
 	//unique_lock<mutex> lock_map(_mapMutex);
-
-	float **grid_data = _map->cells;
 	
 /*#if PARALLELIZE == 1
 #pragma omp parallel for
 #endif*/
-
-	/*particle_type *particle = new particle_type;
-	particle->x = (float) 1000;
-	particle->y = (float) 1000;
-	particle->bearing = M_PI;
-	_curSt->push_back(particle);
-
-	particle_type *particle2 = new particle_type;
-	particle2->x = (float) 1000;
-	particle2->y = (float) 1000;
-	particle2->bearing = .1; 
-	_curSt->push_back(particle2);
-
-	particle_type *particle3 = new particle_type;
-	printf("\n min x: %d, max x: %d, rand: %f\n", _map->min_x, _map->max_x, RandomFloat( _map->min_x, _map->max_x));
-	printf("\n min y: %d, max y: %d, rand: %f\n", _map->min_y, _map->max_y, RandomFloat( _map->min_y, _map->max_y));
-	particle3->x = RandomFloat( _map->min_x, _map->max_x);
-	particle3->y = RandomFloat( _map->min_y, _map->max_y);
-	particle3->bearing = RandomFloat(0.0, 2 * M_PI);
-	_curSt->push_back(particle3);*/
-
-	
-	printf("\n min x: %d, max x: %d\n", _map->min_x, _map->max_x);
-	for (int i = 0; i < _maxP; i++) 
-	{
-		printf("i: %d\n",i);
-
-		particle_type *particle = new particle_type;
-
-		particle->x = RandomFloat( _map->min_x, _map->max_x);
-		particle->y = RandomFloat( _map->min_y, _map->max_y);
-		particle->bearing = RandomFloat(0, 2 * M_PI);
-
-		printf("i: %d, x: %f, y: %f, bearing: %f\n", i, particle->x, particle->y, particle->bearing );
-
-		_curSt->push_back(particle);
-	}
-	printf("done");
 
 	for (particle_type *particle : *_curSt)
 	{
 		particle_type *nxtParticle = new particle_type;
 
 		// sample from guassian
-		particle_type dP = motion_sample(dP_u, sigma);
+		particle_type dP_guas = motion_sample(dP_u, sigma);
+		particle_type dP; 
 
+
+		// transformation matrix
+		Matrix<float, 3, 3> _H_m_r(3,3); 
+		Matrix<float, 3, 3> _H_r_b(3,3); 
+		Matrix<float, 3, 3> _H_b_p(3,3);
+		Matrix<float, 3, 3> _H_m_p(3,3);
+
+		// map to robot
+		_H_m_r << 1, 0, particle->x, 
+				  0, 1, particle->y, 
+				  0, 0, 1;
+
+		// robot to bearing 
+		_H_r_b << cos(particle->bearing), -sin(particle->bearing), 0, 
+				  sin(particle->bearing),  cos(particle->bearing), 0, 
+				  0, 0, 1;
+
+		// bearing to new dx, dy
+		_H_b_p << 1, 0, dP_guas.x, 
+				  0, 1, dP_guas.y, 
+				  0, 0, 1;
+
+		// map to new dx, dy
+		_H_m_p = _H_m_r * _H_r_b * _H_b_p;
+
+		// dx, dy, dtheta
+		dP.x = _H_m_p(0,2) - particle->x;
+		dP.y = _H_m_p(1,2) - particle->y;
+		dP.bearing = dP_guas.bearing;
+
+		// apply update
 		nxtParticle->x = particle->x + dP.x;
 		nxtParticle->y = particle->y + dP.y;
 		nxtParticle->bearing = particle->bearing + dP.bearing;
 
 		// check max, min bounds
 		if (nxtParticle->x < 0 ) 
-		{
-			nxtParticle->x -= dP.x;
-		}
-		else if (nxtParticle->x > _map->max_x/res_x) 
-		{
-			nxtParticle->x -= dP.x;
-		}
-		if (nxtParticle->y < 0 ) 
-		{
-			nxtParticle->y -= dP.y;
-		}
-		else if (nxtParticle->y > _map->max_y/res_y) 
-		{
-			nxtParticle->y -= dP.y;
-		}
+			nxtParticle->x = 0;
+		else if (nxtParticle->x > _map->max_x)
+			nxtParticle->x = _map->max_x;
 
-		// check thresholds
-		int x_ = convToGrid_x(nxtParticle->x);
-		int y_ = convToGrid_y(nxtParticle->y);
+		if (nxtParticle->y < 0) 
+			nxtParticle->y = 0;
+		else if (nxtParticle->y > _map->max_y)
+			nxtParticle->y = _map->max_y;
 
-		if( grid_data[x_][y_] <= obst_thres ) 
-		{
-			nxtParticle->x -= dP.x;
-			nxtParticle->y -= dP.y;
+		if (nxtParticle->bearing < -M_PI)
+			nxtParticle->bearing = M_PI + fmod(nxtParticle->bearing, M_PI);
+		else if (nxtParticle->bearing > M_PI)
+			nxtParticle->bearing = fmod(nxtParticle->bearing, M_PI) - M_PI;
 
-			x_ = convToGrid_x(nxtParticle->x);
-			y_ = convToGrid_y(nxtParticle->y);
-		}
-
-		nxtParticle->bearing = fmod(nxtParticle->bearing, 2*M_PI);
-		if (nxtParticle->bearing < 0) nxtParticle->bearing += 2*M_PI;
-
+		// push state
 		_nxtSt->push_back(nxtParticle);
 
-		printf("\n");
+		//printf("\n");
+		//printf("dx: %f, dy: %f\n", dP_guas.x, dP_guas.y);
 		printf("x: %f + %f = %f\n", particle->x, dP.x, nxtParticle->x);
 		printf("y: %f + %f = %f\n", particle->y, dP.y, nxtParticle->y);
 		printf("bearing: %f + %f = %f\n", particle->bearing, dP.bearing, nxtParticle->bearing);
-		printf("x_: %d, y_: %d\n", x_, y_);
-
 	}
-	printf("end of for loop \n");
+	//printf("end of for loop \n");
 }
