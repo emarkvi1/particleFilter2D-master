@@ -133,7 +133,6 @@ int main(int argc, char **argv)
 		parse->read_log_data(filename.c_str());  //output of log 
 
 		pf pf(parse->_my_map, 1); 
-		pf.test();
 
 		int prev_ptr, curr_ptr;
 		for (int i = 0; i < parse->_logData->size() - 1; i++) {

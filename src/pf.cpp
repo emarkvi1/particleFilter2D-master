@@ -277,25 +277,13 @@ particle_type pf::motion_sample(particle_type u, particle_type sigma) const
 	return dP;
 }
 
-
-void pf::test()
-{
-	printf("test!\n");
-}
-
 void pf::motion_update( log_type *data, log_type *prev_data)
 {
-	// printf("dx: %f, dy: %f, db: %f\n", dx,dy,db);
-	//printf("current x: %f, y: %f, b: %f\n", data->x, data->y, data->theta);
-	//printf("prev: x: %f, y: %f, b: %f\n", prev_data->x, prev_data->y, prev_data->theta);
-
 	// detla x, y, bearing 
 	particle_type dP_u;
 	dP_u.x = data->x - prev_data->x;
 	dP_u.y = data->y - prev_data->y;
 	dP_u.bearing = data->theta - prev_data->theta;
-
-	//printf("delta: x: %f, y: %f, b: %f\n",dP_u.x, dP_u.y, dP_u.bearing);
 
 	// variance 
 	particle_type sigma; 
@@ -373,11 +361,8 @@ void pf::motion_update( log_type *data, log_type *prev_data)
 		// push state
 		_nxtSt->push_back(nxtParticle);
 
-		//printf("\n");
-		//printf("dx: %f, dy: %f\n", dP_guas.x, dP_guas.y);
-		printf("x: %f + %f = %f\n", particle->x, dP.x, nxtParticle->x);
+		/*printf("x: %f + %f = %f\n", particle->x, dP.x, nxtParticle->x);
 		printf("y: %f + %f = %f\n", particle->y, dP.y, nxtParticle->y);
-		printf("bearing: %f + %f = %f\n", particle->bearing, dP.bearing, nxtParticle->bearing);
+		printf("bearing: %f + %f = %f\n", particle->bearing, dP.bearing, nxtParticle->bearing);*/
 	}
-	//printf("end of for loop \n");
 }

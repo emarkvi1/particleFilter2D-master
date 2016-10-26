@@ -103,7 +103,6 @@ public:
 
 	/* MOTION UPDATE */
 	void motion_update( log_type *data, log_type *prev_data);
-	void test();
 
 }; //end class pf
 
